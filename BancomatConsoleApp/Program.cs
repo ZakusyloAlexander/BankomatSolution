@@ -26,7 +26,7 @@ namespace BancomatConsoleApp
             }
 
             InitializeAtms();
-            MainMenu();
+            ShowMainMenu();
         }
 
         static void InitializeAtms()
@@ -37,93 +37,98 @@ namespace BancomatConsoleApp
             banks[1].AddAtm(2, "Михайлівська 57", 20000);
         }
 
-        static void MainMenu()
+        static void ShowMainMenu()
         {
             while (true)
             {
                 Console.Clear();
                 Console.WriteLine("Головне меню:");
-                var menuItems = new List<string> { "Обрати банк", "Вихід" };
-                int choice = MenuLoop(menuItems);
+                int choice = DisplayMenu(new List<string> { "Обрати банк", "Вихід" });
 
                 if (choice == 1) return;
 
-                MenuChooseBank();
+                SelectBank();
             }
         }
 
-        static void MenuChooseBank()
+        static void SelectBank()
         {
             Console.Clear();
             Console.WriteLine("Оберіть банк:");
-            var menuItems = new List<string>();
+            List<string> bankNames = new List<string>();
+
             foreach (var bank in banks)
             {
-                menuItems.Add(bank.BankName);
+                bankNames.Add(bank.BankName);
             }
-            menuItems.Add("Назад");
+            bankNames.Add("Назад");
 
-            int choice = MenuLoop(menuItems);
-            if (choice == menuItems.Count - 1) return;
+            int choice = DisplayMenu(bankNames);
+            if (choice == bankNames.Count - 1) return;
 
             selectedBank = banks[choice];
-            MenuChooseBankomat();
+            SelectAtm();
         }
 
-        static void MenuChooseBankomat()
+        static void SelectAtm()
         {
             Console.Clear();
             Console.WriteLine($"Банк: {selectedBank.BankName}");
             Console.WriteLine("Оберіть банкомат:");
-            var menuItems = new List<string>();
+
+            List<string> atmAddresses = new List<string>();
             foreach (var atm in selectedBank.AtmList)
             {
-                menuItems.Add(atm.GetBankomatAddress());
+                atmAddresses.Add(atm.GetBankomatAddress());
             }
-            menuItems.Add("Назад");
+            atmAddresses.Add("Назад");
 
-            int choice = MenuLoop(menuItems);
-            if (choice == menuItems.Count - 1) return;
+            int choice = DisplayMenu(atmAddresses);
+            if (choice == atmAddresses.Count - 1) return;
 
             activeBankomat = selectedBank.AtmList[choice];
-            MenuChooseAuth();
+            ShowAuthenticationMenu();
         }
 
-        static void MenuChooseAuth()
+        static void ShowAuthenticationMenu()
         {
             while (true)
             {
                 Console.Clear();
                 Console.WriteLine("Авторизація:");
-                var menuItems = new List<string> { "Авторизуватися", "Зареєструватися", "Назад" };
-                int choice = MenuLoop(menuItems);
+                int choice = DisplayMenu(new List<string> { "Авторизуватися", "Зареєструватися", "Назад" });
 
-                switch (choice)
+                if (choice == 2) return;
+
+                if (choice == 0)
                 {
-                    case 0:
-                        if (Authenticate()) AccountMenu();
-                        break;
-                    case 1:
-                        CreateNewAccount();
-                        break;
-                    case 2:
-                        return;
+                    if (AuthenticateUser())
+                    {
+                        ShowAccountMenu();
+                    }
+                }
+                else
+                {
+                    CreateNewAccount();
                 }
             }
         }
-        static void AccountMenu()
+
+        static void ShowAccountMenu()
         {
             while (true)
             {
                 Console.Clear();
                 Console.WriteLine($"Вітаємо, {currentAccount.Name}!");
-                var menuItems = new List<string>
-                {
-                    "Переглянути баланс", "Зняти кошти",
-                    "Поповнити рахунок", "Перерахувати кошти", "Назад"
-                };
 
-                int choice = MenuLoop(menuItems);
+                int choice = DisplayMenu(new List<string>
+                {
+                    "Переглянути баланс",
+                    "Зняти кошти",
+                    "Поповнити рахунок",
+                    "Перерахувати кошти",
+                    "Назад"
+                });
 
                 switch (choice)
                 {
@@ -132,15 +137,12 @@ namespace BancomatConsoleApp
                         Console.WriteLine($"Ваш баланс: {currentAccount.GetBalance()} грн");
                         break;
                     case 1:
-                        Console.Clear();
                         PerformTransaction(activeBankomat.WithDrawMoney, "зняття");
                         break;
                     case 2:
-                        Console.Clear();
                         PerformTransaction(activeBankomat.PutMoney, "поповнення");
                         break;
                     case 3:
-                        Console.Clear();
                         TransferFunds();
                         break;
                     case 4:
@@ -148,6 +150,51 @@ namespace BancomatConsoleApp
                 }
                 Console.ReadKey();
             }
+        }
+
+        static bool AuthenticateUser()
+        {
+            Console.Clear();
+            Console.WriteLine("Введіть номер картки:");
+            string accountNumber = Console.ReadLine();
+            Console.WriteLine("Введіть пін-код:");
+            string pinCode = Console.ReadLine();
+
+            if (selectedBank.Authenticate(accountNumber, pinCode))
+            {
+                currentAccount = selectedBank.FindAccount(accountNumber);
+                return true;
+            }
+            else
+            {
+                Console.WriteLine("Аутентифікація не вдалася.");
+                Console.ReadLine();
+                return false;
+            }
+        }
+
+        static int DisplayMenu(List<string> options)
+        {
+            while (true)
+            {
+                for (int i = 0; i < options.Count; i++)
+                {
+                    Console.WriteLine($"{i + 1}. {options[i]}");
+                }
+
+                Console.Write("Ваш вибір: ");
+                if (int.TryParse(Console.ReadLine(), out int choice) && choice >= 1 && choice <= options.Count)
+                {
+                    return choice - 1;
+                }
+
+                Console.WriteLine("Невірний вибір. Спробуйте ще раз.");
+            }
+        }
+
+        static void BankMessageHandler(object sender, MessageEventArgs e)
+        {
+            Console.WriteLine(e.Message);
         }
 
         static void PerformTransaction(Func<Account, double, bool> transactionAction, string operation)
@@ -204,51 +251,6 @@ namespace BancomatConsoleApp
             {
                 Console.WriteLine("Помилка при створенні акаунту.");
             }
-        }
-
-        static bool Authenticate()
-        {
-            Console.Clear();
-            Console.WriteLine("Введіть номер картки:");
-            string accountNumber = Console.ReadLine();
-            Console.WriteLine("Введіть пін-код:");
-            string pinCode = Console.ReadLine();
-
-            if (selectedBank.Authenticate(accountNumber, pinCode))
-            {
-                currentAccount = selectedBank.FindAccount(accountNumber);
-                return true;
-            }
-            else
-            {
-                Console.WriteLine("Аутентифікація не вдалася.");
-                Console.ReadLine();
-
-                return false;
-            }
-        }
-
-        static int MenuLoop(List<string> menuItems)
-        {
-            while (true)
-            {
-                Console.WriteLine("Оберіть пункт меню:");
-                for (int i = 0; i < menuItems.Count; i++)
-                {
-                    Console.WriteLine($"{i + 1}. {menuItems[i]}");
-                }
-                Console.Write("Ваш вибір: ");
-                if (int.TryParse(Console.ReadLine(), out int index) && index >= 1 && index <= menuItems.Count)
-                {
-                    return index - 1;
-                }
-                Console.WriteLine("Невірний вибір. Спробуйте ще раз.");
-            }
-        }
-
-        static void BankMessageHandler(object sender, MessageEventArgs e)
-        {
-            Console.WriteLine(e.Message);
         }
     }
 }
