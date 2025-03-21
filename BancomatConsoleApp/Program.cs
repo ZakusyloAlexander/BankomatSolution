@@ -11,22 +11,23 @@ namespace BancomatConsoleApp
             new Bank("Приват банк")
         };
 
-        static Bank selectedBank;
-        static AutomatedTellerMachine activeBankomat;
-        static Account currentAccount;
-
         static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             Console.InputEncoding = System.Text.Encoding.UTF8;
+
+            // Ініціалізуємо банкомати
+            InitializeAtms();
+
+            // Створюємо контекст банкомату
+            ATMContext context = new ATMContext();
 
             foreach (var bank in banks)
             {
                 bank.Message += BankMessageHandler;
             }
 
-            InitializeAtms();
-            ShowMainMenu();
+            ShowMainMenu(context);
         }
 
         static void InitializeAtms()
@@ -37,7 +38,7 @@ namespace BancomatConsoleApp
             banks[1].AddAtm(2, "Михайлівська 57", 20000);
         }
 
-        static void ShowMainMenu()
+        static void ShowMainMenu(ATMContext context)
         {
             while (true)
             {
@@ -47,11 +48,11 @@ namespace BancomatConsoleApp
 
                 if (choice == 1) return;
 
-                SelectBank();
+                SelectBank(context);
             }
         }
 
-        static void SelectBank()
+        static void SelectBank(ATMContext context)
         {
             Console.Clear();
             Console.WriteLine("Оберіть банк:");
@@ -66,18 +67,18 @@ namespace BancomatConsoleApp
             int choice = DisplayMenu(bankNames);
             if (choice == bankNames.Count - 1) return;
 
-            selectedBank = banks[choice];
-            SelectAtm();
+            context.SelectedBank = banks[choice];
+            SelectAtm(context);
         }
 
-        static void SelectAtm()
+        static void SelectAtm(ATMContext context)
         {
             Console.Clear();
-            Console.WriteLine($"Банк: {selectedBank.BankName}");
+            Console.WriteLine($"Банк: {context.SelectedBank.BankName}");
             Console.WriteLine("Оберіть банкомат:");
 
             List<string> atmAddresses = new List<string>();
-            foreach (var atm in selectedBank.AtmList)
+            foreach (var atm in context.SelectedBank.AtmList)
             {
                 atmAddresses.Add(atm.GetBankomatAddress());
             }
@@ -86,11 +87,11 @@ namespace BancomatConsoleApp
             int choice = DisplayMenu(atmAddresses);
             if (choice == atmAddresses.Count - 1) return;
 
-            activeBankomat = selectedBank.AtmList[choice];
-            ShowAuthenticationMenu();
+            context.ActiveBankomat = context.SelectedBank.AtmList[choice];
+            ShowAuthenticationMenu(context);
         }
 
-        static void ShowAuthenticationMenu()
+        static void ShowAuthenticationMenu(ATMContext context)
         {
             while (true)
             {
@@ -102,24 +103,24 @@ namespace BancomatConsoleApp
 
                 if (choice == 0)
                 {
-                    if (AuthenticateUser())
+                    if (AuthenticateUser(context))
                     {
-                        ShowAccountMenu();
+                        ShowAccountMenu(context);
                     }
                 }
                 else
                 {
-                    CreateNewAccount();
+                    CreateNewAccount(context);
                 }
             }
         }
 
-        static void ShowAccountMenu()
+        static void ShowAccountMenu(ATMContext context)
         {
             while (true)
             {
                 Console.Clear();
-                Console.WriteLine($"Вітаємо, {currentAccount.Name}!");
+                Console.WriteLine($"Вітаємо, {context.CurrentAccount.Name}!");
 
                 int choice = DisplayMenu(new List<string>
                 {
@@ -134,16 +135,16 @@ namespace BancomatConsoleApp
                 {
                     case 0:
                         Console.Clear();
-                        Console.WriteLine($"Ваш баланс: {currentAccount.GetBalance()} грн");
+                        Console.WriteLine($"Ваш баланс: {context.CurrentAccount.GetBalance()} грн");
                         break;
                     case 1:
-                        PerformTransaction(activeBankomat.WithDrawMoney, "зняття");
+                        PerformTransaction(context, context.ActiveBankomat.WithDrawMoney, "зняття");
                         break;
                     case 2:
-                        PerformTransaction(activeBankomat.PutMoney, "поповнення");
+                        PerformTransaction(context, context.ActiveBankomat.PutMoney, "поповнення");
                         break;
                     case 3:
-                        TransferFunds();
+                        TransferFunds(context);
                         break;
                     case 4:
                         return;
@@ -152,7 +153,7 @@ namespace BancomatConsoleApp
             }
         }
 
-        static bool AuthenticateUser()
+        static bool AuthenticateUser(ATMContext context)
         {
             Console.Clear();
             Console.WriteLine("Введіть номер картки:");
@@ -160,9 +161,9 @@ namespace BancomatConsoleApp
             Console.WriteLine("Введіть пін-код:");
             string pinCode = Console.ReadLine();
 
-            if (selectedBank.Authenticate(accountNumber, pinCode))
+            if (context.SelectedBank.Authenticate(accountNumber, pinCode))
             {
-                currentAccount = selectedBank.FindAccount(accountNumber);
+                context.CurrentAccount = context.SelectedBank.FindAccount(accountNumber);
                 return true;
             }
             else
@@ -197,18 +198,18 @@ namespace BancomatConsoleApp
             Console.WriteLine(e.Message);
         }
 
-        static void PerformTransaction(Func<Account, double, bool> transactionAction, string operation)
+        static void PerformTransaction(ATMContext context, Func<Account, double, bool> transactionAction, string operation)
         {
             double amount = PromptForAmount($"Введіть суму для {operation}: ");
             if (amount <= 0) return;
 
-            if (!transactionAction(currentAccount, amount))
+            if (!transactionAction(context.CurrentAccount, amount))
             {
                 Console.WriteLine($"Не вдалося завершити операцію {operation}.");
             }
         }
 
-        static void TransferFunds()
+        static void TransferFunds(ATMContext context)
         {
             Console.Clear();
             Console.WriteLine("Введіть номер рахунку отримувача:");
@@ -217,7 +218,7 @@ namespace BancomatConsoleApp
 
             if (amount <= 0) return;
 
-            selectedBank.TransferFunds(currentAccount.CardNumber, receiverAccountNumber, amount);
+            context.SelectedBank.TransferFunds(context.CurrentAccount.CardNumber, receiverAccountNumber, amount);
         }
 
         static double PromptForAmount(string message)
@@ -234,7 +235,8 @@ namespace BancomatConsoleApp
                 return -1;
             }
         }
-        static void CreateNewAccount()
+
+        static void CreateNewAccount(ATMContext context)
         {
             Console.Clear();
             Console.WriteLine("Введіть своє ім'я:");
@@ -242,7 +244,7 @@ namespace BancomatConsoleApp
             Console.WriteLine("Введіть пін-код (4 цифри):");
             string pinCode = Console.ReadLine();
 
-            if (selectedBank.CreateAccount(name, pinCode))
+            if (context.SelectedBank.CreateAccount(name, pinCode))
             {
                 Console.WriteLine("Акаунт створено успішно.");
                 Console.ReadLine();
