@@ -152,18 +152,12 @@ namespace BancomatConsoleApp
 
         static void PerformTransaction(Func<Account, double, bool> transactionAction, string operation)
         {
-            Console.Clear();
-            Console.WriteLine($"Введіть суму для {operation}:");
-            if (double.TryParse(Console.ReadLine(), out double amount) && amount > 0)
+            double amount = PromptForAmount($"Введіть суму для {operation}: ");
+            if (amount <= 0) return;
+
+            if (!transactionAction(currentAccount, amount))
             {
-                if (!transactionAction(currentAccount, amount))
-                {
-                    Console.WriteLine($"Не вдалося завершити операцію {operation}.");
-                }
-            }
-            else
-            {
-                Console.WriteLine("Невірний формат суми.");
+                Console.WriteLine($"Не вдалося завершити операцію {operation}.");
             }
         }
 
@@ -172,18 +166,27 @@ namespace BancomatConsoleApp
             Console.Clear();
             Console.WriteLine("Введіть номер рахунку отримувача:");
             string receiverAccountNumber = Console.ReadLine();
-            Console.WriteLine("Введіть суму для перерахування:");
+            double amount = PromptForAmount("Введіть суму для перерахування: ");
 
+            if (amount <= 0) return;
+
+            selectedBank.TransferFunds(currentAccount.CardNumber, receiverAccountNumber, amount);
+        }
+
+        static double PromptForAmount(string message)
+        {
+            Console.Clear();
+            Console.WriteLine(message);
             if (double.TryParse(Console.ReadLine(), out double amount) && amount > 0)
             {
-                selectedBank.TransferFunds(currentAccount.CardNumber, receiverAccountNumber, amount);
+                return amount;
             }
             else
             {
                 Console.WriteLine("Невірний формат суми.");
+                return -1;
             }
         }
-
         static void CreateNewAccount()
         {
             Console.Clear();
